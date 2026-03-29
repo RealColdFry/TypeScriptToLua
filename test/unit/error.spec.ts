@@ -82,16 +82,15 @@ test("return nil from try", () => {
 
 test("multi return from try", () => {
     const testBuilder = util.testFunction`
-        function foobar(): LuaMultiReturn<[string, string]> {
+        function foobar() {
             try {
                 return $multi("foo", "bar");
             } catch {
             }
-            return $multi("", "");
         }
         const [foo, bar] = foobar();
         return foo + bar;
-    `.withLanguageExtensions();
+    `.setOptions({ strictNullChecks: false }).withLanguageExtensions();
     expect(testBuilder.getMainLuaCodeChunk()).not.toMatch("unpack(foobar");
     testBuilder.expectToMatchJsResult();
 });

@@ -138,11 +138,10 @@ test("switch using variable re-declared in cases", () => {
         switch (foo) {
             case 0:
                 let foo = true;
-                return foo;
             case 1:
-                return false;
+                return foo;
         }
-    `.expectToMatchJsResult();
+    `.setOptions({ strictNullChecks: false }).expectToMatchJsResult();
 });
 
 test.each([0, 1, 2])("switch with block statement scope (%p)", inp => {
