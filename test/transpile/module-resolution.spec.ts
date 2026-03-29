@@ -471,6 +471,10 @@ describe("module resolution should not try to resolve modules in noResolvePaths"
                     export function foo(): void;
                 }`
             )
+            .addExtraFile(
+                "preload.d.ts",
+                `declare module "preload" {}`
+            )
             .setOptions({ noResolvePaths: ["ignore*"] })
             .expectToHaveNoDiagnostics()
             .expectToEqual({ result: "foo" });
@@ -598,7 +602,7 @@ test("module resolution uses baseURL to resolve imported files", () => {
                 return { baz = function() return "baz" end }
             `
         )
-        .setOptions({ baseUrl: "./myproject/mydeps" })
+        .setOptions({ baseUrl: "./myproject/mydeps", ignoreDeprecations: "6.0" })
         .expectToEqual({
             fooResult: "foo",
             barResult: "bar",

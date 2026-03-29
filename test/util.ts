@@ -163,8 +163,7 @@ export abstract class TestBuilder {
         skipLibCheck: true,
         target: ts.ScriptTarget.ES2017,
         lib: ["lib.esnext.d.ts"],
-        moduleResolution: ts.ModuleResolutionKind.Node10,
-        ignoreDeprecations: "6.0",
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
         resolveJsonModule: true,
         sourceMap: true,
     };

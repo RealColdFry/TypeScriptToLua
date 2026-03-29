@@ -4,6 +4,7 @@
         "lib": ["es2019"],
         "types": ["node"],
         "module": "commonjs",
+        "moduleResolution": "bundler",
         "experimentalDecorators": true,
 
         "rootDir": "src",

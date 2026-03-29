@@ -138,8 +138,9 @@ test("switch using variable re-declared in cases", () => {
         switch (foo) {
             case 0:
                 let foo = true;
-            case 1:
                 return foo;
+            case 1:
+                return false;
         }
     `.expectToMatchJsResult();
 });

@@ -82,11 +82,12 @@ test("return nil from try", () => {
 
 test("multi return from try", () => {
     const testBuilder = util.testFunction`
-        function foobar() {
+        function foobar(): LuaMultiReturn<[string, string]> {
             try {
                 return $multi("foo", "bar");
             } catch {
             }
+            return $multi("", "");
         }
         const [foo, bar] = foobar();
         return foo + bar;
@@ -129,7 +130,7 @@ test("multi return from catch", () => {
         function foobar(): LuaMultiReturn<[string, string]> {
             try {
                 throw "foobar";
-            } catch (e) {
+            } catch (e: any) {
                 return $multi(e.toString(), " catch");
             }
         }
@@ -243,8 +244,8 @@ test("multi return from catch->finally", () => {
         function foobar() {
             try {
                 throw "foo";
-            } catch (e) {
-                return $multi(evaluate(e), "bar");
+            } catch (e: any) {
+                return $multi(evaluate(e as string), "bar");
             } finally {
                 return $multi("final", "ly");
             }
