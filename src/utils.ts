@@ -1,5 +1,5 @@
 import * as ts from "typescript";
-import * as nativeAssert from "assert";
+import nativeAssert from "assert";
 import * as path from "path";
 
 export function castArray<T>(value: T | T[]): T[];

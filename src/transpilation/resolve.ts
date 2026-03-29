@@ -10,7 +10,7 @@ import { couldNotReadDependency, couldNotResolveRequire } from "./diagnostics";
 import { BuildMode, CompilerOptions } from "../CompilerOptions";
 import { findLuaRequires, LuaRequire } from "./find-lua-requires";
 import { Plugin } from "./plugins";
-import * as picomatch from "picomatch";
+import picomatch from "picomatch";
 
 const resolver = resolve.ResolverFactory.createResolver({
     extensions: [".lua"],

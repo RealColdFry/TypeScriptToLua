@@ -1,5 +1,5 @@
 /* eslint-disable jest/no-standalone-expect */
-import * as nativeAssert from "assert";
+import nativeAssert from "assert";
 import { LauxLib, Lua, LuaLib, LuaState, LUA_OK } from "lua-wasm-bindings/dist/lua";
 import * as fs from "fs";
 import { stringify } from "javascript-stringify";
@@ -164,6 +164,7 @@ export abstract class TestBuilder {
         target: ts.ScriptTarget.ES2017,
         lib: ["lib.esnext.d.ts"],
         moduleResolution: ts.ModuleResolutionKind.Node10,
+        ignoreDeprecations: "6.0",
         resolveJsonModule: true,
         sourceMap: true,
     };

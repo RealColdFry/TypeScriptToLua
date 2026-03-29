@@ -13,6 +13,7 @@
         "newLine": "LF",
         "stripInternal": true,
 
+        "esModuleInterop": true,
         "strict": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true
