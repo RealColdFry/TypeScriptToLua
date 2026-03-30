@@ -29,9 +29,7 @@ const testCases = [
     { binding: "{ x: [{ y }] }", value: { x: [{ y: "y" }] } },
 ].map(({ binding, value }) => ({ binding, value: util.formatCode(value) }));
 
-test.each([
-    ...testCases,
-])("in function parameter (%p)", ({ binding, value }) => {
+test.each([...testCases])("in function parameter (%p)", ({ binding, value }) => {
     util.testFunction`
         let ${allBindings};
         function test(${binding}: any) {

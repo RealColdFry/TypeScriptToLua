@@ -10,7 +10,7 @@ import { couldNotReadDependency, couldNotResolveRequire } from "./diagnostics";
 import { BuildMode, CompilerOptions } from "../CompilerOptions";
 import { findLuaRequires, LuaRequire } from "./find-lua-requires";
 import { Plugin } from "./plugins";
-import picomatch from "picomatch";
+import * as picomatch from "picomatch";
 
 const resolver = resolve.ResolverFactory.createResolver({
     extensions: [".lua"],
@@ -27,7 +27,7 @@ interface ResolutionResult {
 }
 
 class ResolutionContext {
-    private noResolvePaths: picomatch.Matcher[];
+    private noResolvePaths: string[];
 
     public diagnostics: ts.Diagnostic[] = [];
     public resolvedFiles = new Map<string, ProcessedFile>();
@@ -38,9 +38,7 @@ class ResolutionContext {
         private readonly emitHost: EmitHost,
         private readonly plugins: Plugin[]
     ) {
-        const unique = [...new Set(options.noResolvePaths)];
-        const matchers = unique.map(x => picomatch(x));
-        this.noResolvePaths = matchers;
+        this.noResolvePaths = [...new Set(options.noResolvePaths)];
     }
 
     public addAndResolveDependencies(file: ProcessedFile): void {
@@ -73,7 +71,7 @@ class ResolutionContext {
             return;
         }
 
-        if (this.noResolvePaths.find(isMatch => isMatch(required.requirePath))) {
+        if (this.noResolvePaths.find(pattern => picomatch.isMatch(required.requirePath, pattern))) {
             if (this.options.tstlVerbose) {
                 console.log(
                     `Skipping module resolution of ${required.requirePath} as it is in the tsconfig noResolvePaths.`
@@ -218,14 +216,11 @@ class ResolutionContext {
         if (this.options.paths) {
             // If no file found yet and paths are present, try to find project file via paths mappings
             // When baseUrl is not set, resolve paths relative to the tsconfig directory (TS 6.0+ behavior)
-            const pathsBase = this.options.baseUrl
-                ?? (this.options.configFilePath ? path.dirname(this.options.configFilePath) : undefined);
+            const pathsBase =
+                this.options.baseUrl ??
+                (this.options.configFilePath ? path.dirname(this.options.configFilePath) : undefined);
             if (pathsBase) {
-                const fileFromPaths = this.tryGetModuleNameFromPaths(
-                    dependencyPath,
-                    this.options.paths,
-                    pathsBase
-                );
+                const fileFromPaths = this.tryGetModuleNameFromPaths(dependencyPath, this.options.paths, pathsBase);
                 if (fileFromPaths) return fileFromPaths;
             }
         }

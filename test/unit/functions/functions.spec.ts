@@ -25,17 +25,22 @@ test.each(["i++", "i--", "++i", "--i"])("Arrow function unary expression (%p)", 
     `.expectToMatchJsResult();
 });
 
-test.each(["(b: any) => a = b", "(b: any) => a += b", "(b: any) => a -= b", "(b: any) => a *= b", "(b: any) => a /= b", "(b: any) => a **= b", "(b: any) => a %= b"])(
-    "Arrow function assignment (%p)",
-    lambda => {
-        util.testFunction`
+test.each([
+    "(b: any) => a = b",
+    "(b: any) => a += b",
+    "(b: any) => a -= b",
+    "(b: any) => a *= b",
+    "(b: any) => a /= b",
+    "(b: any) => a **= b",
+    "(b: any) => a %= b",
+])("Arrow function assignment (%p)", lambda => {
+    util.testFunction`
             let a = 10;
             let lambda = ${lambda};
             lambda(5);
             return a;
         `.expectToMatchJsResult();
-    }
-);
+});
 
 test.each([{ args: [] }, { args: [1] }, { args: [1, 2] }])("Arrow default values (%p)", ({ args }) => {
     util.testFunction`

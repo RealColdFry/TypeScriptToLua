@@ -133,20 +133,26 @@ test.each([
 });
 
 test.each([
-    ...([
-        { value: "(s: string) => s" },
-        { value: "((s: string) => s)" },
-        { value: "function(s: string) { return s; }" },
-        { value: "(function(s: string) { return s; })" },
-    ] as TestFunction[]).map((f): [TestFunction, string[]] => [f, ["0", "'foobar'"]]),
-    ...([
-        { value: "function(this: any, s: string) { return s; }" },
-        { value: "(function(this: any, s: string) { return s; })" },
-    ] as TestFunction[]).map((f): [TestFunction, string[]] => [f, ["0", "'foobar'"]]),
-    ...([
-        { value: "function(this: void, s: string) { return s; }" },
-        { value: "(function(this: void, s: string) { return s; })" },
-    ] as TestFunction[]).map((f): [TestFunction, string[]] => [f, ["'foobar'"]]),
+    ...(
+        [
+            { value: "(s: string) => s" },
+            { value: "((s: string) => s)" },
+            { value: "function(s: string) { return s; }" },
+            { value: "(function(s: string) { return s; })" },
+        ] as TestFunction[]
+    ).map((f): [TestFunction, string[]] => [f, ["0", "'foobar'"]]),
+    ...(
+        [
+            { value: "function(this: any, s: string) { return s; }" },
+            { value: "(function(this: any, s: string) { return s; })" },
+        ] as TestFunction[]
+    ).map((f): [TestFunction, string[]] => [f, ["0", "'foobar'"]]),
+    ...(
+        [
+            { value: "function(this: void, s: string) { return s; }" },
+            { value: "(function(this: void, s: string) { return s; })" },
+        ] as TestFunction[]
+    ).map((f): [TestFunction, string[]] => [f, ["'foobar'"]]),
 ])("Valid function expression argument with no signature (%p, %p)", (testFunction, args) => {
     util.testFunction`
         const takesFunction: any = (fn: (this: void, ...args: any[]) => any, ...args: any[]) => {

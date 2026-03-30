@@ -1,5 +1,5 @@
 /* eslint-disable jest/no-standalone-expect */
-import nativeAssert from "assert";
+import * as nativeAssert from "assert";
 import { LauxLib, Lua, LuaLib, LuaState, LUA_OK } from "lua-wasm-bindings/dist/lua";
 import * as fs from "fs";
 import { stringify } from "javascript-stringify";
@@ -51,7 +51,7 @@ function getLuaBindingsForVersion(target: tstl.LuaTarget): { lauxlib: LauxLib; l
 }
 
 export function assert(value: any, message?: string | Error): asserts value {
-    nativeAssert(value, message);
+    nativeAssert.ok(value, message);
 }
 
 export const formatCode = (...values: unknown[]) => values.map(e => stringify(e)).join(", ");
@@ -92,17 +92,15 @@ export function expectEachVersionExceptJit<T>(
     };
 }
 
-const memoize: MethodDecorator = (_target, _propertyKey, descriptor) => {
-    const originalFunction = descriptor.value as any;
+const memoize = (originalFunction: any) => {
     const memoized = new WeakMap();
-    descriptor.value = function (this: any, ...args: any[]): any {
+    return function (this: any, ...args: any[]): any {
         if (!memoized.has(this)) {
             memoized.set(this, originalFunction.apply(this, args));
         }
 
         return memoized.get(this);
-    } as any;
-    return descriptor;
+    };
 };
 
 export class ExecutionError extends Error {

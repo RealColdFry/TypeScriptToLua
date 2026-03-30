@@ -5,7 +5,6 @@
         "types": ["node"],
         "module": "commonjs",
         "moduleResolution": "bundler",
-        "experimentalDecorators": true,
 
         "rootDir": "src",
         "outDir": "dist",
@@ -14,7 +13,6 @@
         "newLine": "LF",
         "stripInternal": true,
 
-        "esModuleInterop": true,
         "strict": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true

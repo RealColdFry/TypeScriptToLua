@@ -470,10 +470,7 @@ describe("module resolution should not try to resolve modules in noResolvePaths"
                     export function foo(): void;
                 }`
             )
-            .addExtraFile(
-                "preload.d.ts",
-                `declare module "preload" {}`
-            )
+            .addExtraFile("preload.d.ts", `declare module "preload" {}`)
             .setOptions({ noResolvePaths: ["ignore*"] })
             .expectToHaveNoDiagnostics()
             .expectToEqual({ result: "foo" });

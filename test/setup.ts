@@ -1,4 +1,4 @@
-import assert from "assert";
+import * as assert from "assert";
 import * as ts from "typescript";
 import * as tstl from "../src";
 
@@ -13,7 +13,7 @@ declare global {
 
 expect.extend({
     toHaveDiagnostics(diagnostics: ts.Diagnostic[], expected?: number[]): jest.CustomMatcherResult {
-        assert(Array.isArray(diagnostics));
+        assert.ok(Array.isArray(diagnostics));
         // @ts-ignore
         const matcherHint = this.utils.matcherHint("toHaveDiagnostics", undefined, "", this);
 

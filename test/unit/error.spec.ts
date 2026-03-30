@@ -90,7 +90,9 @@ test("multi return from try", () => {
         }
         const [foo, bar] = foobar();
         return foo + bar;
-    `.setOptions({ strictNullChecks: false }).withLanguageExtensions();
+    `
+        .setOptions({ strictNullChecks: false })
+        .withLanguageExtensions();
     expect(testBuilder.getMainLuaCodeChunk()).not.toMatch("unpack(foobar");
     testBuilder.expectToMatchJsResult();
 });

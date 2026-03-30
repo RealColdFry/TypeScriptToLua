@@ -421,7 +421,12 @@ test.each([
     { array: [0, 1, 2, 3], start: 1, deleteCount: undefined },
     { array: [0, 1, 2, 3], start: 1, deleteCount: null },
 ])("array.splice (%p)", ({ array, start, deleteCount, newElements = [] }) => {
-    const deleteCountCode = deleteCount === undefined ? "undefined as any" : deleteCount === null ? "null as any" : util.formatCode(deleteCount);
+    const deleteCountCode =
+        deleteCount === undefined
+            ? "undefined as any"
+            : deleteCount === null
+            ? "null as any"
+            : util.formatCode(deleteCount);
     const newElementsCode = newElements.length > 0 ? ", " + util.formatCode(...newElements) : "";
     util.testFunction`
         const array: number[] = ${util.formatCode(array)};
@@ -805,9 +810,12 @@ test.each([
 });
 
 describe("array.fill", () => {
-    test.each(["([] as number[])", "[1]", "[1,2,3,4]"])("Fills full length of array without other parameters (%p)", arr => {
-        util.testExpression`${arr}.fill(5)`.expectToMatchJsResult();
-    });
+    test.each(["([] as number[])", "[1]", "[1,2,3,4]"])(
+        "Fills full length of array without other parameters (%p)",
+        arr => {
+            util.testExpression`${arr}.fill(5)`.expectToMatchJsResult();
+        }
+    );
 
     test.each(["[1,2,3]", "[1,2,3,4,5,6]"])("Fills starting from start parameter (%p)", arr => {
         util.testExpression`${arr}.fill(5, 3)`.expectToMatchJsResult();

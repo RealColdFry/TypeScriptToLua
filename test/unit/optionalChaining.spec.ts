@@ -1,6 +1,5 @@
 import { notAllowedOptionalAssignment } from "../../src/transformation/utils/diagnostics";
 import * as util from "../util";
-import { ScriptTarget } from "typescript";
 
 test.each(["null", "undefined", '{ foo: "foo" }'])("optional chaining (%p)", value => {
     util.testFunction`
@@ -135,8 +134,10 @@ test.each(["undefined", "{ foo(val: any) {return val} }"])(
     }
 );
 
-test.each(["undefined", "{ foo(v: any) { return v} }"])("with preceding statements on right side modifying left", value => {
-    util.testFunction`
+test.each(["undefined", "{ foo(v: any) { return v} }"])(
+    "with preceding statements on right side modifying left",
+    value => {
+        util.testFunction`
         let i = 0
         let obj: any = ${value};
         function bar() {
@@ -147,10 +148,11 @@ test.each(["undefined", "{ foo(v: any) { return v} }"])("with preceding statemen
 
         return {result: obj?.foo(bar(), i++), obj, i}
   `
-        .expectToMatchJsResult()
-        .expectLuaToMatchSnapshot();
-    // should use if statement, as there are preceding statements
-});
+            .expectToMatchJsResult()
+            .expectLuaToMatchSnapshot();
+        // should use if statement, as there are preceding statements
+    }
+);
 
 test("does not suppress error if left side is false", () => {
     const result = util.testFunction`
@@ -342,8 +344,6 @@ describe("optional chaining function calls", () => {
         `
             .setOptions({
                 strict,
-                target: ScriptTarget.ES5,
-                ignoreDeprecations: "6.0" as any,
             })
             .expectToMatchJsResult();
     });

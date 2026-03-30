@@ -1,5 +1,5 @@
 import * as ts from "typescript";
-import nativeAssert from "assert";
+import * as nativeAssert from "assert";
 import * as path from "path";
 
 export function castArray<T>(value: T | T[]): T[];
@@ -77,7 +77,7 @@ export function cast<TOriginal, TCast extends TOriginal>(
 }
 
 export function assert(value: any, message?: string | Error): asserts value {
-    nativeAssert(value, message);
+    nativeAssert.ok(value, message);
 }
 
 export function assertNever(_value: never): never {
