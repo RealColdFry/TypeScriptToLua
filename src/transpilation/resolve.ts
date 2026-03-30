@@ -215,14 +215,19 @@ class ResolutionContext {
         const fileFromPath = this.getFileFromPath(resolvedPath);
         if (fileFromPath) return fileFromPath;
 
-        if (this.options.paths && this.options.baseUrl) {
+        if (this.options.paths) {
             // If no file found yet and paths are present, try to find project file via paths mappings
-            const fileFromPaths = this.tryGetModuleNameFromPaths(
-                dependencyPath,
-                this.options.paths,
-                this.options.baseUrl
-            );
-            if (fileFromPaths) return fileFromPaths;
+            // When baseUrl is not set, resolve paths relative to the tsconfig directory (TS 6.0+ behavior)
+            const pathsBase = this.options.baseUrl
+                ?? (this.options.configFilePath ? path.dirname(this.options.configFilePath) : undefined);
+            if (pathsBase) {
+                const fileFromPaths = this.tryGetModuleNameFromPaths(
+                    dependencyPath,
+                    this.options.paths,
+                    pathsBase
+                );
+                if (fileFromPaths) return fileFromPaths;
+            }
         }
 
         // Not a TS file in our project sources, use resolver to check if we can find dependency
