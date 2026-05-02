@@ -9,6 +9,68 @@ import { expressionResultIsUsed, typeAlwaysHasSomeOfFlags } from "../utils/types
 import { moveToPrecedingTemp } from "../visitors/expression-list";
 import { isUnpackCall, wrapInTable } from "../utils/lua-ast";
 
+// String-named methods on Array.prototype, derived from the lib.es*.d.ts that
+// TSTL is built against (see "lib" in tsconfig.json). A TS dep or lib bump
+// that adds a new Array method changes this union and triggers the build-time
+// completeness check at the bottom of this block.
+type ArrayMethodName = {
+    [K in keyof unknown[]]-?: K extends string ? (unknown[][K] extends (...args: any) => any ? K : never) : never;
+}[keyof unknown[]];
+
+// Methods that transformArrayPrototypeCall handles below: either by lowering
+// to a lualib call, or by listing the name explicitly as known-but-unsupported.
+// Maintained by hand. The two Exclude<> assertions afterwards force this list
+// to stay in sync with `ArrayMethodName`.
+type HandledArrayMethod =
+    | "at"
+    | "concat"
+    | "copyWithin"
+    | "entries"
+    | "every"
+    | "fill"
+    | "filter"
+    | "find"
+    | "findIndex"
+    | "findLast"
+    | "findLastIndex"
+    | "flat"
+    | "flatMap"
+    | "forEach"
+    | "includes"
+    | "indexOf"
+    | "join"
+    | "keys"
+    | "lastIndexOf"
+    | "map"
+    | "pop"
+    | "push"
+    | "reduce"
+    | "reduceRight"
+    | "reverse"
+    | "shift"
+    | "slice"
+    | "some"
+    | "sort"
+    | "splice"
+    | "toLocaleString"
+    | "toReversed"
+    | "toSorted"
+    | "toSpliced"
+    | "toString"
+    | "unshift"
+    | "values"
+    | "with";
+
+type AssertNever<T extends never> = T;
+// If a lib bump adds a method, MissingArrayMethods becomes that name and the
+// constraint `extends never` fails. Add the method to HandledArrayMethod and
+// either implement it in the switch or list it under the "known but unsupported"
+// cases.
+export type MissingArrayMethods = AssertNever<Exclude<ArrayMethodName, HandledArrayMethod>>;
+// If HandledArrayMethod contains a typo or stale name, ExtraArrayMethods
+// surfaces it here.
+export type ExtraArrayMethods = AssertNever<Exclude<HandledArrayMethod, ArrayMethodName>>;
+
 export function transformArrayConstructorCall(
     context: TransformationContext,
     node: ts.CallExpression,
@@ -78,6 +140,123 @@ function transformSingleElementArrayPush(
     return expressionIsUsed ? lengthExpression : lua.createNilLiteral();
 }
 
+type ArrayMethodHandler = (
+    context: TransformationContext,
+    node: ts.CallExpression,
+    calledMethod: ts.PropertyAccessExpression,
+    caller: lua.Expression,
+    params: lua.Expression[]
+) => lua.Expression | undefined;
+
+const lualib =
+    (feature: LuaLibFeature): ArrayMethodHandler =>
+    (context, node, _calledMethod, caller, params) =>
+        transformLuaLibFunction(context, feature, node, caller, ...params);
+
+const unsupported: ArrayMethodHandler = (context, _node, calledMethod) => {
+    context.diagnostics.push(unsupportedProperty(calledMethod.name, "array", calledMethod.name.text));
+    return undefined;
+};
+
+// Dispatch table; the Record<HandledArrayMethod, ...> type forces an entry
+// for every handled method, so omitting one fails TSTL build. Combined with
+// the MissingArrayMethods/ExtraArrayMethods checks above, every drift axis
+// (lib ↔ HandledArrayMethod ↔ dispatch) is covered at TS check time.
+const arrayMethodHandlers: { [K in HandledArrayMethod]: ArrayMethodHandler } = {
+    at: lualib(LuaLibFeature.ArrayAt),
+    concat: lualib(LuaLibFeature.ArrayConcat),
+    entries: lualib(LuaLibFeature.ArrayEntries),
+    fill: lualib(LuaLibFeature.ArrayFill),
+    push(context, node, _calledMethod, caller, params) {
+        if (node.arguments.length === 1) {
+            const param = params[0] ?? lua.createNilLiteral();
+            if (isUnpackCall(param)) {
+                return transformLuaLibFunction(
+                    context,
+                    LuaLibFeature.ArrayPushArray,
+                    node,
+                    caller,
+                    (param as lua.CallExpression).params[0] ?? lua.createNilLiteral()
+                );
+            }
+            if (!lua.isDotsLiteral(param)) {
+                return transformSingleElementArrayPush(context, node, caller, param);
+            }
+        }
+        return transformLuaLibFunction(context, LuaLibFeature.ArrayPush, node, caller, ...params);
+    },
+    reverse: lualib(LuaLibFeature.ArrayReverse),
+    shift: (_context, node, _calledMethod, caller) =>
+        lua.createCallExpression(
+            lua.createTableIndexExpression(lua.createIdentifier("table"), lua.createStringLiteral("remove")),
+            [caller, lua.createNumericLiteral(1)],
+            node
+        ),
+    unshift: lualib(LuaLibFeature.ArrayUnshift),
+    sort: lualib(LuaLibFeature.ArraySort),
+    pop: (_context, node, _calledMethod, caller) =>
+        lua.createCallExpression(
+            lua.createTableIndexExpression(lua.createIdentifier("table"), lua.createStringLiteral("remove")),
+            [caller],
+            node
+        ),
+    forEach: lualib(LuaLibFeature.ArrayForEach),
+    find: lualib(LuaLibFeature.ArrayFind),
+    findIndex: lualib(LuaLibFeature.ArrayFindIndex),
+    includes: lualib(LuaLibFeature.ArrayIncludes),
+    indexOf: lualib(LuaLibFeature.ArrayIndexOf),
+    map: lualib(LuaLibFeature.ArrayMap),
+    filter: lualib(LuaLibFeature.ArrayFilter),
+    reduce: lualib(LuaLibFeature.ArrayReduce),
+    reduceRight: lualib(LuaLibFeature.ArrayReduceRight),
+    some: lualib(LuaLibFeature.ArraySome),
+    every: lualib(LuaLibFeature.ArrayEvery),
+    slice: lualib(LuaLibFeature.ArraySlice),
+    splice: lualib(LuaLibFeature.ArraySplice),
+    join(context, node, calledMethod, caller, params) {
+        const callerType = context.checker.getTypeAtLocation(calledMethod.expression);
+        const elementType = context.checker.getElementTypeOfArrayType(callerType);
+        if (
+            elementType &&
+            typeAlwaysHasSomeOfFlags(context, elementType, ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike)
+        ) {
+            const defaultSeparatorLiteral = lua.createStringLiteral(",");
+            const param = params[0] ?? lua.createNilLiteral();
+            const parameters = [
+                caller,
+                node.arguments.length === 0
+                    ? defaultSeparatorLiteral
+                    : lua.isStringLiteral(param)
+                    ? param
+                    : lua.createBinaryExpression(param, defaultSeparatorLiteral, lua.SyntaxKind.OrOperator),
+            ];
+
+            return lua.createCallExpression(
+                lua.createTableIndexExpression(lua.createIdentifier("table"), lua.createStringLiteral("concat")),
+                parameters,
+                node
+            );
+        }
+        return transformLuaLibFunction(context, LuaLibFeature.ArrayJoin, node, caller, ...params);
+    },
+    flat: lualib(LuaLibFeature.ArrayFlat),
+    flatMap: lualib(LuaLibFeature.ArrayFlatMap),
+    toReversed: lualib(LuaLibFeature.ArrayToReversed),
+    toSorted: lualib(LuaLibFeature.ArrayToSorted),
+    toSpliced: lualib(LuaLibFeature.ArrayToSpliced),
+    with: lualib(LuaLibFeature.ArrayWith),
+
+    // Known but not lowered: emit the existing diagnostic.
+    copyWithin: unsupported,
+    findLast: unsupported,
+    findLastIndex: unsupported,
+    keys: unsupported,
+    lastIndexOf: unsupported,
+    toLocaleString: unsupported,
+    toString: unsupported,
+    values: unsupported,
+};
+
 export function transformArrayPrototypeCall(
     context: TransformationContext,
     node: ts.CallExpression,
@@ -86,130 +265,44 @@ export function transformArrayPrototypeCall(
     const signature = context.checker.getResolvedSignature(node);
     const [caller, params] = transformCallAndArguments(context, calledMethod.expression, node.arguments, signature);
 
-    const expressionName = calledMethod.name.text;
-    switch (expressionName) {
-        case "at":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayAt, node, caller, ...params);
-        case "concat":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayConcat, node, caller, ...params);
-        case "entries":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayEntries, node, caller);
-        case "fill":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayFill, node, caller, ...params);
-        case "push":
-            if (node.arguments.length === 1) {
-                const param = params[0] ?? lua.createNilLiteral();
-                if (isUnpackCall(param)) {
-                    return transformLuaLibFunction(
-                        context,
-                        LuaLibFeature.ArrayPushArray,
-                        node,
-                        caller,
-                        (param as lua.CallExpression).params[0] ?? lua.createNilLiteral()
-                    );
-                }
-                if (!lua.isDotsLiteral(param)) {
-                    return transformSingleElementArrayPush(context, node, caller, param);
-                }
-            }
-
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayPush, node, caller, ...params);
-        case "reverse":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayReverse, node, caller);
-        case "shift":
-            return lua.createCallExpression(
-                lua.createTableIndexExpression(lua.createIdentifier("table"), lua.createStringLiteral("remove")),
-                [caller, lua.createNumericLiteral(1)],
-                node
-            );
-        case "unshift":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayUnshift, node, caller, ...params);
-        case "sort":
-            return transformLuaLibFunction(context, LuaLibFeature.ArraySort, node, caller, ...params);
-        case "pop":
-            return lua.createCallExpression(
-                lua.createTableIndexExpression(lua.createIdentifier("table"), lua.createStringLiteral("remove")),
-                [caller],
-                node
-            );
-        case "forEach":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayForEach, node, caller, ...params);
-        case "find":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayFind, node, caller, ...params);
-        case "findIndex":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayFindIndex, node, caller, ...params);
-        case "includes":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayIncludes, node, caller, ...params);
-        case "indexOf":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayIndexOf, node, caller, ...params);
-        case "map":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayMap, node, caller, ...params);
-        case "filter":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayFilter, node, caller, ...params);
-        case "reduce":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayReduce, node, caller, ...params);
-        case "reduceRight":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayReduceRight, node, caller, ...params);
-        case "some":
-            return transformLuaLibFunction(context, LuaLibFeature.ArraySome, node, caller, ...params);
-        case "every":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayEvery, node, caller, ...params);
-        case "slice":
-            return transformLuaLibFunction(context, LuaLibFeature.ArraySlice, node, caller, ...params);
-        case "splice":
-            return transformLuaLibFunction(context, LuaLibFeature.ArraySplice, node, caller, ...params);
-        case "join":
-            const callerType = context.checker.getTypeAtLocation(calledMethod.expression);
-            const elementType = context.checker.getElementTypeOfArrayType(callerType);
-            if (
-                elementType &&
-                typeAlwaysHasSomeOfFlags(context, elementType, ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike)
-            ) {
-                const defaultSeparatorLiteral = lua.createStringLiteral(",");
-                const param = params[0] ?? lua.createNilLiteral();
-                const parameters = [
-                    caller,
-                    node.arguments.length === 0
-                        ? defaultSeparatorLiteral
-                        : lua.isStringLiteral(param)
-                        ? param
-                        : lua.createBinaryExpression(param, defaultSeparatorLiteral, lua.SyntaxKind.OrOperator),
-                ];
-
-                return lua.createCallExpression(
-                    lua.createTableIndexExpression(lua.createIdentifier("table"), lua.createStringLiteral("concat")),
-                    parameters,
-                    node
-                );
-            }
-
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayJoin, node, caller, ...params);
-        case "flat":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayFlat, node, caller, ...params);
-        case "flatMap":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayFlatMap, node, caller, ...params);
-        case "toReversed":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayToReversed, node, caller, ...params);
-        case "toSorted":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayToSorted, node, caller, ...params);
-        case "toSpliced":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayToSpliced, node, caller, ...params);
-        case "with":
-            return transformLuaLibFunction(context, LuaLibFeature.ArrayWith, node, caller, ...params);
-        default:
-            context.diagnostics.push(unsupportedProperty(calledMethod.name, "array", expressionName));
+    // Index lookup naturally returns undefined for unknown names (e.g. user on
+    // a newer lib than TSTL was built against), so no separate membership
+    // check is needed.
+    const handler = (arrayMethodHandlers as Record<string, ArrayMethodHandler | undefined>)[calledMethod.name.text];
+    if (!handler) {
+        context.diagnostics.push(unsupportedProperty(calledMethod.name, "array", calledMethod.name.text));
+        return undefined;
     }
+    return handler(context, node, calledMethod, caller, params);
 }
+
+// String-named, non-method properties on Array.prototype, derived from the
+// lib.es*.d.ts that TSTL is built against. Today this is just `length`; the
+// pattern is here so a future lib addition (or a TSTL contributor wiring up
+// something new like a `Symbol.toStringTag`-equivalent string property)
+// surfaces at TS check time the same way method drift does.
+type ArrayPropertyName = {
+    [K in keyof unknown[]]-?: K extends string ? (unknown[][K] extends (...args: any) => any ? never : K) : never;
+}[keyof unknown[]];
+
+type HandledArrayProperty = "length";
+
+export type MissingArrayProperties = AssertNever<Exclude<ArrayPropertyName, HandledArrayProperty>>;
+export type ExtraArrayProperties = AssertNever<Exclude<HandledArrayProperty, ArrayPropertyName>>;
+
+type ArrayPropertyHandler = (
+    context: TransformationContext,
+    node: ts.PropertyAccessExpression
+) => lua.Expression | undefined;
+
+const arrayPropertyHandlers: { [K in HandledArrayProperty]: ArrayPropertyHandler } = {
+    length: (context, node) => createTableLengthExpression(context, context.transformExpression(node.expression), node),
+};
 
 export function transformArrayProperty(
     context: TransformationContext,
     node: ts.PropertyAccessExpression
 ): lua.Expression | undefined {
-    switch (node.name.text) {
-        case "length":
-            const expression = context.transformExpression(node.expression);
-            return createTableLengthExpression(context, expression, node);
-        default:
-            return undefined;
-    }
+    const handler = (arrayPropertyHandlers as Record<string, ArrayPropertyHandler | undefined>)[node.name.text];
+    return handler?.(context, node);
 }
